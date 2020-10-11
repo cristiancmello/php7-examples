@@ -65,20 +65,40 @@ function response_validate($response) {
   ];
 
   foreach ($response['rules'] as $fieldName => $rules) {
+    $fieldValue = $response['data'][$fieldName];
+
     foreach ($rules as $ruleName => $ruleValue) {
       switch($ruleName) {
+        case 'required':
+          if ($ruleValue) {
+            if (empty($fieldValue)) {
+              $validationFields['validation_fields'][$fieldName] = [
+                'message' => get_validation_message_body_from_template('The {field} is required.', [ 'field' => $fieldName ])
+              ];
+            }
+          }
+        break;
         case 'min':
-          if (strlen($response['data'][$fieldName]) < $ruleValue) {
+          if (strlen($fieldValue) < $ruleValue) {
             $validationFields['validation_fields'][$fieldName] = [
-              'message' => get_validation_message_body_from_template('The {field} must have at {min_value}', [ 'field' => $fieldName, 'min_value' => $ruleValue ])
+              'message' => get_validation_message_body_from_template('The {field} must have at {min_value}.', [ 'field' => $fieldName, 'min_value' => $ruleValue ])
             ];
           }
         break;
         case 'max':
-          if (strlen($response['data'][$fieldName]) > $ruleValue) {
+          if (strlen($fieldValue) > $ruleValue) {
             $validationFields['validation_fields'][$fieldName] = [
-              'message' => get_validation_message_body_from_template('The {field} must be less {max_value}', [ 'field' => $fieldName, 'max_value' => $ruleValue ])
+              'message' => get_validation_message_body_from_template('The {field} must be less {max_value}.', [ 'field' => $fieldName, 'max_value' => $ruleValue ])
             ];
+          }
+        break;
+        case 'is_int':
+          if ($ruleValue) {
+            if (!ctype_digit($fieldValue)) {
+              $validationFields['validation_fields'][$fieldName] = [
+                'message' => get_validation_message_body_from_template('The {field} must be integer.', [ 'field' => $fieldName ])
+              ];
+            }
           }
         break;
       }
@@ -90,19 +110,56 @@ function response_validate($response) {
   return $responseValidated;
 }
 
-$response = set_response('POST');
+function get_validation_message($response, $field) {
+  if (empty($response['validation_fields'][$field])) {
+    return null;
+  }
 
+  return $response['validation_fields'][$field]['message']['content'];
+}
+
+function get_response_data($response, &$errors, $field) {
+  $message = get_validation_message($response, $field);
+
+  if (!empty($message)) {
+    array_push($errors, $message);
+    return null;
+  }
+
+  return $response['data'][$field];
+}
+
+$response = set_response('POST');
 $response = set_response_validation_body($response, [
   'name' => [
-    'min' => 4,
-    'max' => 12
+    'required' => true
   ],
   'lastname' => [
-    'min' => 3
+    'required' => true,
+    'min' => 3,
+    'max' => 12
+  ],
+  'age' => [
+    'is_int' => true,
+    'required' => true
   ]
 ]);
-
 $response = response_validate($response);
+
+
+
+/*
+structure:
+data
+rules
+validation_rules:
+  name:
+    message:
+      content
+  lastname:
+    message:
+      content
+*/
 
 ?>
 <!DOCTYPE html>
@@ -113,5 +170,19 @@ $response = response_validate($response);
   <title>PHP Forms</title>
 </head>
 <body>
+  <?php $errors = [] ?>
+  <?php $name = get_response_data($response, $errors, 'name') ?>
+  <?php $lastname = get_response_data($response, $errors, 'lastname') ?>
+  <?php $age = get_response_data($response, $errors, 'age') ?>
+
+  <?php if (count($errors) > 0): ?>
+    <?php foreach($errors as $error): ?>
+    <?php echo "<h3>$error</h3>" ?>
+    <?php endforeach; ?>
+  <?php else: ?>
+    <?php echo "<h1>Welcome, $name!</h1>" ?>
+    <?php echo "<h2>Your last name is $lastname</h2>" ?>
+    <?php echo "<small>You are $age old</small>" ?>
+  <?php endif; ?>
 </body>
 </html>
